@@ -29,9 +29,10 @@ MODE_FILE = os.path.expanduser("~/.sonos-dial-mode")
 HUE_ZONE_FILE = os.path.expanduser("~/.sonos-dial-hue-zone")
 from dial_input import DialInputHandler, MockDialInputHandler, EVDEV_AVAILABLE
 
-# Configure logging
+# Configure logging (--debug flag enables DEBUG level)
+log_level = logging.DEBUG if "--debug" in sys.argv else logging.INFO
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
@@ -180,7 +181,7 @@ class SonosDialController:
 
     def _on_wiggle(self):
         """Handle quadruple click -> toggle mode."""
-        logger.info("Quadruple click detected - switching mode!")
+        logger.debug("Quadruple click detected")
         old_mode = self._mode
         self._mode = "hue" if self._mode == "sonos" else "sonos"
         self._save_mode()
@@ -323,7 +324,7 @@ class SonosDialController:
     async def _flash_all_zones(self, count: int = 1):
         """Flash all Hue zones for mode switch feedback."""
         loop = asyncio.get_event_loop()
-        logger.info(f"Flashing all zones {count}x: {HUE_ZONES}")
+        logger.debug(f"Flashing all zones {count}x: {HUE_ZONES}")
 
         for i in range(count):
             # Dim all zones simultaneously

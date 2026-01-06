@@ -116,7 +116,7 @@ def toggle_zone(bridge: Bridge, zone_name: str) -> Optional[bool]:
                 current_on = group_data.get("action", {}).get("on", False)
                 new_state = not current_on
                 bridge.set_group(int(group_id), "on", new_state)
-                logger.info(f"Zone '{zone_name}' turned {'on' if new_state else 'off'}")
+                logger.debug(f"Zone '{zone_name}' turned {'on' if new_state else 'off'}")
                 return new_state
         logger.warning(f"Zone '{zone_name}' not found for toggle")
         return None

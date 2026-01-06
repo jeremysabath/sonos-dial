@@ -149,10 +149,10 @@ class DialInputHandler:
         # If within debounce window of last click, it's part of the same sequence
         if time_since_last < CLICK_DEBOUNCE:
             self._click_count += 1
-            logger.info(f"Click {self._click_count} (gap: {time_since_last:.3f}s)")
+            logger.debug(f"Click {self._click_count} (gap: {time_since_last:.3f}s)")
         else:
             self._click_count = 1
-            logger.info(f"Click 1 (new sequence, gap: {time_since_last:.3f}s)")
+            logger.debug(f"Click 1 (new sequence, gap: {time_since_last:.3f}s)")
 
         self._last_click_time = now
 
@@ -163,7 +163,7 @@ class DialInputHandler:
 
         # If we've reached max clicks, resolve immediately (no waiting)
         if self._click_count >= MAX_CLICKS:
-            logger.info(f"Max clicks reached ({self._click_count}), resolving immediately")
+            logger.debug(f"Max clicks reached ({self._click_count}), resolving immediately")
             self._resolve_clicks()
         else:
             # Wait for debounce period to see if more clicks come
@@ -180,20 +180,20 @@ class DialInputHandler:
         self._click_count = 0
 
         if count == 1:
-            logger.info("Dial: single click -> play/pause")
+            logger.debug("Dial: single click -> play/pause")
             self.on_press()
         elif count == 2 and self.on_double_press:
-            logger.info("Dial: double click -> next")
+            logger.debug("Dial: double click -> next")
             self.on_double_press()
         elif count == 3 and self.on_triple_press:
-            logger.info("Dial: triple click -> previous")
+            logger.debug("Dial: triple click -> previous")
             self.on_triple_press()
         elif count >= 4 and self.on_quadruple_press:
-            logger.info("Dial: quadruple click -> mode switch")
+            logger.debug("Dial: quadruple click -> mode switch")
             self.on_quadruple_press()
         else:
             # Fallback to single press if no handler
-            logger.info(f"Dial: {count} clicks, falling back to single press")
+            logger.debug(f"Dial: {count} clicks, falling back to single press")
             self.on_press()
 
     def stop(self):

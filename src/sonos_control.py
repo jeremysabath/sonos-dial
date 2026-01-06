@@ -49,7 +49,7 @@ def adjust_volume(speaker: SoCo, delta: int = VOLUME_STEP) -> Optional[int]:
         current = speaker.group.volume
         new_volume = max(0, min(100, current + delta))
         speaker.group.volume = new_volume
-        logger.info(f"Volume: {current} -> {new_volume}")
+        logger.debug(f"Volume: {current} -> {new_volume}")
         return new_volume
     except Exception as e:
         logger.error(f"Error adjusting volume: {e}")
@@ -67,11 +67,11 @@ def toggle_playback(speaker: SoCo) -> Optional[str]:
 
         if state == "PLAYING":
             speaker.pause()
-            logger.info("Paused playback")
+            logger.debug("Paused playback")
             return "PAUSED_PLAYBACK"
         else:
             speaker.play()
-            logger.info("Started playback")
+            logger.debug("Started playback")
             return "PLAYING"
     except Exception as e:
         logger.error(f"Error toggling playback: {e}")
@@ -85,7 +85,7 @@ def next_track(speaker: SoCo) -> bool:
     """
     try:
         speaker.next()
-        logger.info("Skipped to next track")
+        logger.debug("Skipped to next track")
         return True
     except Exception as e:
         logger.error(f"Error skipping to next track: {e}")
@@ -112,11 +112,11 @@ def previous_track(speaker: SoCo, restart_threshold: int = 3) -> bool:
         if seconds > restart_threshold:
             # Mid-track: restart current track
             speaker.seek("0:00:00")
-            logger.info(f"Restarted track (was at {position})")
+            logger.debug(f"Restarted track (was at {position})")
         else:
             # Near start: go to previous track
             speaker.previous()
-            logger.info(f"Previous track (was at {position})")
+            logger.debug(f"Previous track (was at {position})")
         return True
     except Exception as e:
         logger.error(f"Error in previous_track: {e}")
