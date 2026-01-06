@@ -38,6 +38,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Dry-run mode: log actions without making API calls
+DRY_RUN = "--dry-run" in sys.argv
+
 
 class SonosDialController:
     """Main controller that ties dial input to Sonos control."""
@@ -62,6 +65,11 @@ class SonosDialController:
         self._hue_brightness_delta = 0  # Accumulated brightness change
         self._hue_brightness_task: Optional[asyncio.Task] = None
         self._hue_last_send_time = 0.0  # For throttling
+
+        # Sonos volume throttling state (prevents race conditions with rapid dial turns)
+        self._sonos_volume_delta = 0  # Accumulated volume change
+        self._sonos_volume_task: Optional[asyncio.Task] = None
+        self._sonos_last_send_time = 0.0  # For throttling
 
         # Create dial handler with callbacks
         handler_class = MockDialInputHandler if use_mock_dial else DialInputHandler
@@ -201,20 +209,60 @@ class SonosDialController:
     # Sonos-specific handlers
 
     def _sonos_volume_up(self):
-        """Sonos: increase volume."""
+        """Sonos: increase volume (throttled)."""
         speaker = self._get_target_speaker()
         if speaker:
-            adjust_volume(speaker, VOLUME_STEP)
+            self._queue_sonos_volume(VOLUME_STEP)
         else:
             logger.debug("No speaker to control, ignoring volume up")
 
     def _sonos_volume_down(self):
-        """Sonos: decrease volume."""
+        """Sonos: decrease volume (throttled)."""
         speaker = self._get_target_speaker()
         if speaker:
-            adjust_volume(speaker, -VOLUME_STEP)
+            self._queue_sonos_volume(-VOLUME_STEP)
         else:
             logger.debug("No speaker to control, ignoring volume down")
+
+    def _queue_sonos_volume(self, delta: int):
+        """Accumulate volume delta with throttling (max ~7 updates/sec)."""
+        import time
+        self._sonos_volume_delta += delta
+        now = time.time()
+        throttle_interval = 0.15  # 150ms between sends
+
+        # If enough time passed, send immediately
+        if now - self._sonos_last_send_time >= throttle_interval:
+            self._sonos_last_send_time = now
+            accumulated = self._sonos_volume_delta
+            self._sonos_volume_delta = 0
+            asyncio.create_task(self._send_sonos_volume(accumulated))
+        else:
+            # Schedule trailing send to catch final value
+            if self._sonos_volume_task and not self._sonos_volume_task.done():
+                self._sonos_volume_task.cancel()
+            self._sonos_volume_task = asyncio.create_task(self._trailing_sonos_volume())
+
+    async def _send_sonos_volume(self, delta: int):
+        """Send volume adjustment to Sonos speaker."""
+        speaker = self._get_target_speaker()
+        if speaker:
+            if DRY_RUN:
+                logger.info(f"[DRY-RUN] Would adjust volume by {delta:+d} on {speaker.player_name}")
+                return
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, adjust_volume, speaker, delta)
+
+    async def _trailing_sonos_volume(self):
+        """Wait then send any remaining accumulated volume."""
+        import time
+        await asyncio.sleep(0.15)
+
+        if self._sonos_volume_delta != 0:
+            self._sonos_last_send_time = time.time()
+            delta = self._sonos_volume_delta
+            self._sonos_volume_delta = 0
+            await self._send_sonos_volume(delta)
 
     def _sonos_toggle_playback(self):
         """Sonos: toggle play/pause."""
@@ -298,6 +346,9 @@ class SonosDialController:
 
     async def _send_hue_brightness(self, delta: int):
         """Send brightness adjustment to Hue bridge."""
+        if DRY_RUN:
+            logger.info(f"[DRY-RUN] Would adjust Hue brightness by {delta:+d} on {self._hue_zone}")
+            return
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None, adjust_brightness, self._hue_bridge, self._hue_zone, delta
@@ -350,13 +401,19 @@ class SonosDialController:
         loop = asyncio.get_event_loop()
         while self._running:
             try:
-                # Run blocking Sonos calls in thread pool to avoid blocking event loop
-                self.speakers = await loop.run_in_executor(None, discover_speakers)
+                # Run blocking Sonos calls in thread pool with timeout
+                self.speakers = await asyncio.wait_for(
+                    loop.run_in_executor(None, discover_speakers),
+                    timeout=10.0
+                )
                 if not self.speakers:
                     logger.warning("No Sonos speakers found on network")
                     self.active_speaker = None
                 else:
-                    self.active_speaker = await loop.run_in_executor(None, get_active_speaker, self.speakers)
+                    self.active_speaker = await asyncio.wait_for(
+                        loop.run_in_executor(None, get_active_speaker, self.speakers),
+                        timeout=10.0
+                    )
                     if self.active_speaker:
                         # Remember this speaker for when playback stops
                         self._last_speaker = self.active_speaker
@@ -373,6 +430,8 @@ class SonosDialController:
                     else:
                         logger.debug("No speaker currently playing")
 
+            except asyncio.TimeoutError:
+                logger.warning("Sonos polling timed out - will retry")
             except Exception as e:
                 logger.error(f"Error polling speakers: {e}")
 
@@ -412,13 +471,20 @@ class SonosDialController:
 
         loop = asyncio.get_event_loop()
 
-        # Initial Sonos discovery (run in thread to not block)
+        # Initial Sonos discovery (run in thread to not block, with timeout)
         logger.info("Discovering Sonos speakers...")
-        self.speakers = await loop.run_in_executor(None, discover_speakers)
-        if self.speakers:
-            logger.info(f"Found {len(self.speakers)} speaker(s): {[s.player_name for s in self.speakers]}")
-        else:
-            logger.warning("No Sonos speakers found - will keep trying")
+        try:
+            self.speakers = await asyncio.wait_for(
+                loop.run_in_executor(None, discover_speakers),
+                timeout=15.0  # Don't let discovery hang startup
+            )
+            if self.speakers:
+                logger.info(f"Found {len(self.speakers)} speaker(s): {[s.player_name for s in self.speakers]}")
+            else:
+                logger.warning("No Sonos speakers found - will keep trying")
+        except asyncio.TimeoutError:
+            logger.warning("Sonos discovery timed out - will keep trying in background")
+            self.speakers = []
 
         # Initialize Hue
         await self._initialize_hue()

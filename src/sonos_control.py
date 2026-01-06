@@ -2,6 +2,7 @@
 
 import soco
 from soco import SoCo
+from soco import config as soco_config
 from typing import Optional
 import logging
 
@@ -9,13 +10,21 @@ from config import VOLUME_STEP
 
 logger = logging.getLogger(__name__)
 
+# Use shorter timeouts to avoid hanging on unresponsive speakers
+# Default is 20s which causes long hangs and boot loops
+soco_config.REQUEST_TIMEOUT = 3.0
+
 
 def discover_speakers() -> list[SoCo]:
     """Discover all Sonos speakers on the network."""
-    speakers = soco.discover(timeout=5)
-    if speakers is None:
+    try:
+        speakers = soco.discover(timeout=5)
+        if speakers is None:
+            return []
+        return sorted(list(speakers), key=lambda s: s.player_name)
+    except Exception as e:
+        logger.error(f"Error discovering speakers: {e}")
         return []
-    return sorted(list(speakers), key=lambda s: s.player_name)
 
 
 def get_active_speaker(speakers: list[SoCo]) -> Optional[SoCo]:

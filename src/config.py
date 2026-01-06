@@ -12,7 +12,7 @@ ACTIVE_SPEAKER_POLL_INTERVAL = 5.0
 DIAL_DEVICE_NAME_PATTERN = "Keyboard"
 
 # Hue configuration
-HUE_BRIDGE_IP = None  # Auto-discover if None, or set explicit IP
+HUE_BRIDGE_IP = "192.168.10.100"  # Fallback IP if discovery fails
 HUE_CONFIG_FILE = os.path.expanduser("~/.sonos-dial-hue")
 HUE_ZONES = ["All Kitchen", "Stove Room", "Office"]  # Zones to cycle through
 HUE_BRIGHTNESS_STEP = 25  # Brightness adjustment per dial tick (0-254 scale, ~10% per tick)

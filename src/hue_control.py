@@ -22,18 +22,15 @@ def discover_bridge() -> Optional[str]:
     """
     Discover Hue bridge on the network.
 
-    Uses the Philips discovery service (https://discovery.meethue.com).
+    Tries Philips discovery service first (https://discovery.meethue.com),
+    falls back to configured IP if discovery fails.
     Returns bridge IP or None if not found.
     """
-    # Use configured IP if set
-    if HUE_BRIDGE_IP:
-        logger.info(f"Using configured Hue bridge IP: {HUE_BRIDGE_IP}")
-        return HUE_BRIDGE_IP
-
     if not PHUE_AVAILABLE:
         logger.warning("phue not available - Hue control disabled")
         return None
 
+    # Try discovery service first
     try:
         with urllib.request.urlopen("https://discovery.meethue.com", timeout=5) as response:
             data = json.loads(response.read().decode())
@@ -47,6 +44,11 @@ def discover_bridge() -> Optional[str]:
         logger.debug(f"Hue bridge discovery failed (invalid response): {e}")
     except Exception as e:
         logger.debug(f"Hue bridge discovery failed: {e}")
+
+    # Fall back to configured IP
+    if HUE_BRIDGE_IP:
+        logger.info(f"Discovery failed, using fallback Hue bridge IP: {HUE_BRIDGE_IP}")
+        return HUE_BRIDGE_IP
 
     logger.warning("No Hue bridge found on network")
     return None
