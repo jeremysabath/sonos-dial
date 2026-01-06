@@ -1,0 +1,21 @@
+[Unit]
+Description=Sonos Dial Controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jeremysabath
+Group=input
+WorkingDirectory=/home/jeremysabath/sonos-dial
+ExecStart=/home/jeremysabath/sonos-dial/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Give time for network to be fully ready
+ExecStartPre=/bin/sleep 5
+
+[Install]
+WantedBy=multi-user.target
