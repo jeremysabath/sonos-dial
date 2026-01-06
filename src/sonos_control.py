@@ -40,7 +40,6 @@ def get_active_speaker(speakers: list[SoCo]) -> Optional[SoCo]:
             if state == "PLAYING":
                 # Return the group coordinator (controls the whole group)
                 coordinator = speaker.group.coordinator
-                logger.info(f"Found active speaker: {coordinator.player_name}")
                 return coordinator
         except Exception as e:
             logger.debug(f"Error checking speaker {speaker.player_name}: {e}")

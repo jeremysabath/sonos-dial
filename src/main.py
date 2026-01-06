@@ -399,6 +399,8 @@ class SonosDialController:
     async def _poll_active_speaker(self):
         """Periodically check for active speaker."""
         loop = asyncio.get_event_loop()
+        prev_active_name = None  # Track changes to reduce log noise
+        prev_had_speakers = True  # Assume we have speakers initially
         while self._running:
             try:
                 # Run blocking Sonos calls in thread pool with timeout
@@ -407,19 +409,28 @@ class SonosDialController:
                     timeout=10.0
                 )
                 if not self.speakers:
-                    logger.warning("No Sonos speakers found on network")
+                    if prev_had_speakers:
+                        logger.warning("No Sonos speakers found on network")
+                        prev_had_speakers = False
                     self.active_speaker = None
                 else:
+                    prev_had_speakers = True
                     self.active_speaker = await asyncio.wait_for(
                         loop.run_in_executor(None, get_active_speaker, self.speakers),
                         timeout=10.0
                     )
                     if self.active_speaker:
+                        # Log only when active speaker changes
+                        if self.active_speaker.player_name != prev_active_name:
+                            logger.info(f"Active speaker: {self.active_speaker.player_name}")
+                            prev_active_name = self.active_speaker.player_name
                         # Remember this speaker for when playback stops
                         self._last_speaker = self.active_speaker
                         self._save_last_speaker_name(self.active_speaker.player_name)
                     elif self._last_speaker:
-                        logger.debug(f"No speaker playing, using last: {self._last_speaker.player_name}")
+                        if prev_active_name is not None:
+                            logger.debug(f"Playback stopped, using last: {self._last_speaker.player_name}")
+                            prev_active_name = None
                     elif self._last_speaker_name and not self._last_speaker:
                         # Try to recover speaker from persisted name
                         for speaker in self.speakers:
@@ -427,8 +438,7 @@ class SonosDialController:
                                 self._last_speaker = speaker.group.coordinator
                                 logger.info(f"Recovered last speaker from disk: {self._last_speaker.player_name}")
                                 break
-                    else:
-                        logger.debug("No speaker currently playing")
+                        prev_active_name = None
 
             except asyncio.TimeoutError:
                 logger.warning("Sonos polling timed out - will retry")
