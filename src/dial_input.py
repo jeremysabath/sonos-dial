@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Multi-click detection settings
 CLICK_DEBOUNCE = 0.30  # max time between clicks in a sequence (slightly generous to catch fast clickers)
-MAX_CLICKS = 3  # maximum clicks to detect
+MAX_CLICKS = 4  # maximum clicks to detect (4 = mode switch)
 
 
 def find_dial_device() -> Optional[str]:
@@ -66,12 +66,14 @@ class DialInputHandler:
         on_press: Callable[[], None],
         on_double_press: Optional[Callable[[], None]] = None,
         on_triple_press: Optional[Callable[[], None]] = None,
+        on_wiggle: Optional[Callable[[], None]] = None,
     ):
         self.on_volume_up = on_volume_up
         self.on_volume_down = on_volume_down
         self.on_press = on_press
         self.on_double_press = on_double_press
         self.on_triple_press = on_triple_press
+        self.on_quadruple_press = on_wiggle  # Quadruple click for mode switch
         self._device: Optional[InputDevice] = None
         self._running = False
         self._click_count = 0
@@ -116,7 +118,7 @@ class DialInputHandler:
                 if not self._running:
                     break
 
-                # Only handle key press events (value=1), not release (value=0) or hold (value=2)
+                # Only handle key press events (value=1), not release or hold
                 if event.type == ecodes.EV_KEY and event.value == 1:
                     self._handle_key(event.code)
 
@@ -183,24 +185,32 @@ class DialInputHandler:
         elif count == 2 and self.on_double_press:
             logger.info("Dial: double click -> next")
             self.on_double_press()
-        elif count >= 3 and self.on_triple_press:
+        elif count == 3 and self.on_triple_press:
             logger.info("Dial: triple click -> previous")
             self.on_triple_press()
+        elif count >= 4 and self.on_quadruple_press:
+            logger.info("Dial: quadruple click -> mode switch")
+            self.on_quadruple_press()
         else:
             # Fallback to single press if no handler
             logger.info(f"Dial: {count} clicks, falling back to single press")
             self.on_press()
 
     def stop(self):
-        """Stop the event loop."""
+        """Stop the event loop by closing the device."""
         self._running = False
+        if self._device:
+            try:
+                self._device.close()
+            except Exception:
+                pass
 
 
 class MockDialInputHandler:
     """
     Mock dial handler for local development without hardware.
     Reads from stdin: '+' for volume up, '-' for volume down, 'p' for press.
-    Supports multi-click: type 'p' multiple times quickly, or '2' for double, '3' for triple.
+    Supports multi-click: type 'p' multiple times quickly, or '2'/'3'/'4' for double/triple/quadruple.
     """
 
     def __init__(
@@ -210,12 +220,14 @@ class MockDialInputHandler:
         on_press: Callable[[], None],
         on_double_press: Optional[Callable[[], None]] = None,
         on_triple_press: Optional[Callable[[], None]] = None,
+        on_wiggle: Optional[Callable[[], None]] = None,
     ):
         self.on_volume_up = on_volume_up
         self.on_volume_down = on_volume_down
         self.on_press = on_press
         self.on_double_press = on_double_press
         self.on_triple_press = on_triple_press
+        self.on_quadruple_press = on_wiggle  # Quadruple click for mode switch
         self._running = False
         self._click_count = 0
         self._last_click_time = 0.0
@@ -228,7 +240,7 @@ class MockDialInputHandler:
     async def run(self):
         """Run mock input loop reading from stdin."""
         self._running = True
-        logger.info("Starting MOCK dial input (use +/-/p, or 2/3 for double/triple click)")
+        logger.info("Starting MOCK dial input (use +/-/p, or 2/3/4 for double/triple/quadruple click)")
 
         loop = asyncio.get_event_loop()
         reader = asyncio.StreamReader()
@@ -259,6 +271,10 @@ class MockDialInputHandler:
                     logger.debug("Mock: triple press (shortcut)")
                     if self.on_triple_press:
                         self.on_triple_press()
+                elif char == '4':
+                    logger.debug("Mock: quadruple press (shortcut)")
+                    if self.on_quadruple_press:
+                        self.on_quadruple_press()
 
         except Exception as e:
             logger.error(f"Error in mock input loop: {e}")
@@ -300,9 +316,12 @@ class MockDialInputHandler:
         elif count == 2 and self.on_double_press:
             logger.debug("Mock: double press -> next")
             self.on_double_press()
-        elif count >= 3 and self.on_triple_press:
+        elif count == 3 and self.on_triple_press:
             logger.debug("Mock: triple press -> previous")
             self.on_triple_press()
+        elif count >= 4 and self.on_quadruple_press:
+            logger.debug("Mock: quadruple press -> mode switch")
+            self.on_quadruple_press()
         else:
             logger.debug(f"Mock: {count} clicks, falling back to single press")
             self.on_press()

@@ -11,11 +11,9 @@ WorkingDirectory=/home/jeremysabath/sonos-dial
 ExecStart=/home/jeremysabath/sonos-dial/.venv/bin/python main.py
 Restart=always
 RestartSec=5
+TimeoutStopSec=10
 StandardOutput=journal
 StandardError=journal
-
-# Give time for network to be fully ready
-ExecStartPre=/bin/sleep 5
 
 [Install]
 WantedBy=multi-user.target

@@ -1,10 +1,25 @@
 # Sonos Dial Controller
 
-A Raspberry Pi Zero 2W project that turns a Peakzooc wireless dial into a physical Sonos controller.
+A Raspberry Pi Zero 2W project that turns a Peakzooc wireless dial into a controller for Sonos speakers and Philips Hue lights.
 
-- **Rotate dial**: Adjust volume
-- **Press dial**: Play/pause
-- **Auto-selects**: Controls whichever speaker is currently playing
+## Controls
+
+**Quadruple-click** to switch between Sonos and Hue modes.
+
+### Sonos Mode
+| Action | Function |
+|--------|----------|
+| Rotate | Adjust volume |
+| Single click | Play/pause |
+| Double click | Next track |
+| Triple click | Previous track |
+
+### Hue Mode
+| Action | Function |
+|--------|----------|
+| Rotate | Adjust brightness |
+| Single click | Toggle on/off |
+| Double click | Cycle to next zone (with flash) |
 
 ## Hardware
 
@@ -18,12 +33,12 @@ A Raspberry Pi Zero 2W project that turns a Peakzooc wireless dial into a physic
 
 ```
 [Dial] --2.4G USB--> [Pi Zero 2W] --WiFi--> [Sonos Speakers]
-                          |
+                          |                  [Hue Bridge]
                      Python service
-                     (evdev + soco)
+                   (evdev + soco + phue)
 ```
 
-The dial presents as a USB HID keyboard, sending `KEY_VOLUMEUP`, `KEY_VOLUMEDOWN`, and `KEY_MUTE` events. The Python service reads these via `evdev` and translates them to Sonos API calls via `soco`.
+The dial presents as a USB HID keyboard, sending `KEY_VOLUMEUP`, `KEY_VOLUMEDOWN`, and `KEY_MUTE` events. The Python service reads these via `evdev` and translates them to Sonos API calls via `soco` or Hue API calls via `phue`.
 
 ## Pi Setup
 
@@ -100,25 +115,39 @@ sudo systemctl start sonos-dial
 Edit `src/config.py`:
 
 ```python
-# Volume change per dial tick (percentage points)
-VOLUME_STEP = 3
+# Sonos settings
+VOLUME_STEP = 3  # Volume change per dial tick (percentage points)
+ACTIVE_SPEAKER_POLL_INTERVAL = 5.0  # How often to check for active speaker
 
-# How often to check for active speaker (seconds)
-ACTIVE_SPEAKER_POLL_INTERVAL = 5.0
+# Hue settings
+HUE_ZONES = ["All Kitchen", "Stove Room", "Office"]  # Zones to cycle through
+HUE_BRIGHTNESS_STEP = 25  # Brightness change per tick (0-254 scale)
 
 # Device name pattern to match the dial
 DIAL_DEVICE_NAME_PATTERN = "Keyboard"
 ```
 
+### First-Time Hue Setup
+
+The Hue bridge is auto-discovered on your network. On first run:
+
+1. Watch the logs: `ssh <user>@<host>.local "sudo journalctl -u sonos-dial -f"`
+2. When you see "Press the Hue bridge button", press the physical button on your Hue bridge
+3. Restart the service: `sudo systemctl restart sonos-dial`
+
+Credentials are saved to `~/.sonos-dial-hue` and won't need to be re-entered.
+
 ## Usage
 
-Just turn the dial. The service automatically:
+The service starts in Sonos mode by default. It automatically:
 
-1. Discovers all Sonos speakers on the network
-2. Finds whichever one is currently playing
-3. Routes dial input to that speaker's group
+1. Discovers Sonos speakers and Hue bridge on the network
+2. In Sonos mode, finds whichever speaker is currently playing
+3. Routes dial input to the active device
 
-If nothing is playing, dial input is ignored.
+**Quadruple-click** to switch between Sonos and Hue modes. Mode persists across restarts.
+
+In Hue mode, **double-click** to cycle through configured zones. The selected zone flashes briefly to confirm.
 
 ## Useful Commands
 
@@ -126,8 +155,11 @@ If nothing is playing, dial input is ignored.
 # Check service status
 sudo systemctl status sonos-dial
 
-# View logs (live)
+# View logs (live) - run on Pi or via SSH
 journalctl -u sonos-dial -f
+
+# View logs remotely (from dev machine)
+ssh <user>@<host>.local "sudo journalctl -u sonos-dial -f"
 
 # View recent logs
 journalctl -u sonos-dial -n 50
@@ -208,8 +240,9 @@ ssh <user>@<host>.local "sudo systemctl restart sonos-dial"
 sonos-dial/
 ├── src/
 │   ├── main.py           # Entry point, async controller
-│   ├── dial_input.py     # evdev input handling
-│   ├── sonos_control.py  # SoCo wrapper
+│   ├── dial_input.py     # evdev input handling, click detection
+│   ├── sonos_control.py  # SoCo wrapper for Sonos
+│   ├── hue_control.py    # phue wrapper for Hue
 │   └── config.py         # Settings
 ├── requirements.txt      # Python dependencies
 ├── deploy.sh             # rsync to Pi
@@ -217,9 +250,17 @@ sonos-dial/
 └── README.md
 ```
 
+### Persisted State
+
+- `~/.sonos-dial-last-speaker` - Last active Sonos speaker
+- `~/.sonos-dial-mode` - Current mode (sonos/hue)
+- `~/.sonos-dial-hue-zone` - Last selected Hue zone
+- `~/.sonos-dial-hue` - Hue bridge credentials
+
 ## Credits
 
 - [SoCo](https://github.com/SoCo/SoCo) - Python library for Sonos control
+- [phue](https://github.com/studioimaginaire/phue) - Python library for Philips Hue
 - [python-evdev](https://python-evdev.readthedocs.io/) - Linux input device handling
 
 Co-created with Claude Code.
