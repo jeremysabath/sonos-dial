@@ -76,3 +76,48 @@ def toggle_playback(speaker: SoCo) -> Optional[str]:
     except Exception as e:
         logger.error(f"Error toggling playback: {e}")
         return None
+
+
+def next_track(speaker: SoCo) -> bool:
+    """
+    Skip to the next track.
+    Returns True on success, False on error.
+    """
+    try:
+        speaker.next()
+        logger.info("Skipped to next track")
+        return True
+    except Exception as e:
+        logger.error(f"Error skipping to next track: {e}")
+        return False
+
+
+def previous_track(speaker: SoCo, restart_threshold: int = 3) -> bool:
+    """
+    Go back to the previous track (or restart current track if mid-playback).
+    Standard media behavior: if more than threshold seconds into track, restart; otherwise go to previous.
+    Returns True on success, False on error.
+    """
+    try:
+        # Get current position in track
+        track_info = speaker.get_current_track_info()
+        position = track_info.get("position", "0:00:00")
+
+        # Parse position (format: H:MM:SS or HH:MM:SS)
+        parts = position.split(":")
+        seconds = int(parts[-1]) + int(parts[-2]) * 60
+        if len(parts) > 2:
+            seconds += int(parts[-3]) * 3600
+
+        if seconds > restart_threshold:
+            # Mid-track: restart current track
+            speaker.seek("0:00:00")
+            logger.info(f"Restarted track (was at {position})")
+        else:
+            # Near start: go to previous track
+            speaker.previous()
+            logger.info(f"Previous track (was at {position})")
+        return True
+    except Exception as e:
+        logger.error(f"Error in previous_track: {e}")
+        return False
