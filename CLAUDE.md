@@ -8,20 +8,26 @@ Raspberry Pi Zero 2W + Peakzooc wireless dial → Sonos/Hue controller. The dial
 
 **Quadruple-click** toggles between Sonos mode (volume/playback) and Hue mode (brightness/on-off).
 
+## Setup
+
+Copy `.env.example` to `.env` and configure your values:
+```bash
+cp .env.example .env
+# Edit .env with your PI_HOST, PI_USER, PI_PATH, HUE_BRIDGE_IP, HUE_ZONES
+```
+
 ## Commands
 
 ```bash
 # Deploy to Pi and restart service
-./deploy.sh && ssh jeremysabath@pi-zero.local "sudo systemctl restart sonos-dial"
+./deploy.sh && ssh $PI_USER@$PI_HOST "sudo systemctl restart sonos-dial"
 
 # View logs on Pi
-ssh jeremysabath@pi-zero.local "sudo journalctl -u sonos-dial -n 50 --no-pager"
+ssh $PI_USER@$PI_HOST "sudo journalctl -u sonos-dial -n 50 --no-pager"
 
 # Local testing without hardware (mock mode reads +/-/p from stdin, 4 for quadruple-click)
 python src/main.py --mock
 ```
-
-Deploy settings can be overridden: `PI_HOST`, `PI_USER`, `PI_PATH` environment variables.
 
 ## Architecture
 
