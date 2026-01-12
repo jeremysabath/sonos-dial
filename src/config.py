@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Volume adjustment per dial tick (percentage points)
-VOLUME_STEP = 3
+VOLUME_STEP = 1
 
 # How often to re-scan for active speaker (seconds)
 ACTIVE_SPEAKER_POLL_INTERVAL = 5.0
