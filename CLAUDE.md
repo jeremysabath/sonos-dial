@@ -52,3 +52,7 @@ hue_control.py   # phue wrapper: discover bridge, brightness, toggle, flash
 Edit `src/config.py`:
 - Sonos: `VOLUME_STEP`, `ACTIVE_SPEAKER_POLL_INTERVAL`, `DIAL_DEVICE_NAME_PATTERN`
 - Hue: `HUE_ZONES` (zones to cycle), `HUE_BRIGHTNESS_STEP`, `HUE_BRIDGE_IP` (or auto-discover)
+
+## Known Issues
+
+**Bookworm WiFi instability**: Pi Zero 2W with Raspberry Pi OS Bookworm has a known issue where NetworkManager fails to reconnect after WiFi drops. A `network-watchdog.timer` systemd unit runs every 5 minutes to detect and auto-recover by restarting NetworkManager. See README troubleshooting section for setup.

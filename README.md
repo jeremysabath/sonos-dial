@@ -217,6 +217,55 @@ source .venv/bin/activate
 python main.py
 ```
 
+### WiFi disconnects and won't reconnect
+
+This is a [known issue](https://forums.raspberrypi.com/viewtopic.php?t=370689) with Raspberry Pi OS Bookworm on Pi Zero 2W. NetworkManager sometimes fails to reconnect after WiFi drops.
+
+**Install the network watchdog** to auto-recover:
+
+```bash
+# Create watchdog script
+sudo tee /usr/local/bin/network-watchdog.sh << 'EOF'
+#!/bin/bash
+GATEWAY="192.168.10.1"  # Change to your router IP
+if ! ping -c 1 -W 5 "$GATEWAY" > /dev/null 2>&1; then
+    logger -t "network-watchdog" "Network unreachable, restarting NetworkManager"
+    systemctl restart NetworkManager
+fi
+EOF
+sudo chmod +x /usr/local/bin/network-watchdog.sh
+
+# Create systemd service
+sudo tee /etc/systemd/system/network-watchdog.service << 'EOF'
+[Unit]
+Description=Network Watchdog
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/network-watchdog.sh
+EOF
+
+# Create timer (runs every 5 minutes)
+sudo tee /etc/systemd/system/network-watchdog.timer << 'EOF'
+[Unit]
+Description=Run network watchdog every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# Enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable --now network-watchdog.timer
+```
+
+Check watchdog logs: `journalctl -t network-watchdog`
+
 ## Development
 
 ### Local Testing (without dial hardware)
